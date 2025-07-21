@@ -87,6 +87,10 @@ class Board:
     def get_bar_stones(self, color: str) -> list[Stone]:
         return self._bar[color]
     
+    @property
+    def get_stacks(self) -> list[Stack]:
+        return self._stacks
+    
 
 def test():
     board = Board()

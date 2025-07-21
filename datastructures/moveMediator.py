@@ -1,7 +1,8 @@
-from typing import Union
+from typing import Optional, Union
 from datastructures.Bar import Bar
 from datastructures.Board import Board
 from datastructures.GameState import GameState
+from datastructures.Stone import Stone
 
 
 class MoveMediator:
@@ -16,18 +17,19 @@ class MoveMediator:
         current_player = self._game_state.get_current_player
         current_dice = self._game_state.get_current_dice
 
-        # 1. Is it the player's turn? (GameState)
+        # is it the player's turn?
         if self._board.get_bar_stones(current_player):
             if not isinstance(from_stack, Bar):
                 return False
     
-        # 2. Are there stones on the bar that must be re-entered first? (Board)
-        # 3. Does the dice roll permit this move distance? (GameState)
+        # Are there stones on the bar that must be re-entered first? (Board)
+        # does the dice roll permit this move distance? 
         distance = self._calculate_distance(from_stack, to_stack, current_player)
 
         if distance not in current_dice:
             return False
-        # 4. Is the destination stack open or hittable? (Board)
+        
+        # dest availability
         destination_stack = self._board.get_stack(to_stack)
         top_stones = destination_stack.get_stones
 
@@ -45,14 +47,34 @@ class MoveMediator:
 
     def can_bear_off(self, color) -> bool:
         # all the stones are in the home(last 5 stacks)
-        ...
+        stacks = self._board.get_stacks
+
+        home_range = range(0, 6) if color == "black" else range(19, 25)
+
+        for i, stack in enumerate(stacks):
+            # exclude home stacks
+            if i in home_range:
+                continue
+            for stone in stack:
+                if(stone.get_color == color):
+                    return False
+            return True
 
     def execute_move(self, from_stack: int, to_stack: int):
         ...
 
-    def hit_stone(self, to_stack):
-        # detects when the stone is hit and sending it to the bar
-        ...
+    def hit_stone(self, to_stack: int) -> Optional[Stone]:
+
+        current_player = self._game_state.get_current_player()
+
+        if self._is_hit(to_stack, current_player):
+            stack = self._board.get_stack(to_stack)
+            hit_stone = stack.peek_stone()
+            self._board.move_to_bar(hit_stone)
+
+            return hit_stone
+
+        return None
 
     def proccess_bar(self, from_bar, to_stack):
         #  handles getting off the bar and making it mandatory to have it empty
