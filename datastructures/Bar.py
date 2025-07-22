@@ -1,6 +1,7 @@
 from datastructures.Stone import Stone
+from datastructures.interfaces import StoneContainer
 
-class Bar:
+class Bar(StoneContainer):
     def __init__(self):
         self._bars = {"white": [], "black": []}
 
@@ -12,7 +13,7 @@ class Bar:
         self._bars[stone.get_color].append(stone)
 
     def remove_stone(self, stone: Stone):
-        ...
+        self._bars[stone.get_color].remove(stone)
 
     def get_bar(self, color: str):
         self._bars[color]

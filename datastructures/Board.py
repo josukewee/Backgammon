@@ -49,24 +49,37 @@ class Board:
                 self._stone_location[stone] = stack
                 stack.add_stone(stone)
     
-    def move_stone(self, stone: Stone, target: int) -> None:
-        # probably needs to update imput stone to stone_uid
-        if not (1 <= target <= self.STACK_NUM):
-            raise ValueError("Stack number should be within 1 and 24")
-
-        # remove from current possition(stack, bar, Home)
-        self._stone_location[stone].remove_last_stone()
-        # current
-        target_stack = self._stacks[target - 1]
-        target_stack.add_stone(stone)
-        # add to the new possiton
-        self._stone_location[stone] = target_stack
-
-    def move_to_bar(self, stone: Stone) -> None:
+    # probably needs to update imput stone to stone_uid
+    def move_stone(self, stone: Stone, target: Union[int, Bar, Home]) -> None:
         origin = self._stone_location[stone]
+
+        if isinstance(origin, Home):
+            raise TypeError("Cannot move a stone from home")
+
+        # remove stone from its origin (shared interface)
         origin.remove_stone(stone)
-        self._bar.add_stone(stone)
-        self._stone_location[stone] = self._bar
+
+        # moving to another Stack
+        if isinstance(target, int):
+            if not (1 <= target <= self.STACK_NUM):
+                raise ValueError("Target stack number must be between 1 and 24")
+            target_stack = self._stacks[target - 1]
+            target_stack.add_stone(stone)
+            self._stone_location[stone] = target_stack
+
+        # moving to Bar (usually on hit)
+        elif isinstance(target, Bar):
+            target.add_stone(stone)
+            self._stone_location[stone] = target
+
+        # bearing off to Home
+        elif isinstance(target, Home):
+            target.add_stone(stone)
+            self._stone_location[stone] = target
+
+        else:
+            raise TypeError(f"Invalid target type: {type(target)}")
+
 
     def move_to_home(self, stone: Stone) -> None:
         origin = self._stone_location[stone]
@@ -90,6 +103,14 @@ class Board:
     @property
     def get_stacks(self) -> list[Stack]:
         return self._stacks
+    
+    @property
+    def get_bar(self) -> Bar:
+        return self._bar
+    
+    @property
+    def get_home(self) -> Home:
+        return self._home
     
 
 def test():

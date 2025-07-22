@@ -1,7 +1,9 @@
 from datastructures.Stone import Stone
+from datastructures.interfaces import StoneContainer
+
 from collections import deque
 
-class Stack:
+class Stack(StoneContainer):
     # stack is purely the datastructure that knows no gamelogic
 
     def __init__(self, index, *stones: Stone):
@@ -10,13 +12,13 @@ class Stack:
 
     def add_stone(self, stone: Stone) -> bool:
         self._elements.append(stone)
-            
+
     def remove_last_stone(self) -> Stone:
         return self._elements.pop()
-        
-    def remove_first_stone(self) -> bool:
-        self._elements.popleft()
-
+          
+    def remove_stone(self, stone: Stone) -> Stone:
+        return self._elements.remove(stone)
+      
     def peek_stone(self) -> Stone:
         return self._elements[-1]
     
