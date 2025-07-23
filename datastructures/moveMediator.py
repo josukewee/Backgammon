@@ -68,19 +68,19 @@ class MoveMediator:
             for stone in stack:
                 if(stone.get_color == color):
                     return False
-            return True
+        return True
 
-    def execute_move(self, from_stack: Union[int, Bar], to_stack: int) -> None:
+    def execute_move(self, from_stack: Union[int, Bar], to_stack: int) -> tuple[Stone, Optional[Stone]]:
         """Performs a legal move including hit, move, or bearing off."""
         current_player = self._game_state.get_current_player
         current_dice = self._game_state.get_current_dice
+        hit_stone = None
 
         # validate move
         if not self.validate_move(from_stack, to_stack):
             raise ValueError(f"Invalid move from stack index: {from_stack} to stack index: {to_stack} by {current_player}")
         
         distance = self._calculate_distance(from_stack, to_stack, current_player)
-        stone = self._board.get_stack(from_stack).peek_stone()
 
         if distance in current_dice:
             current_dice.remove(distance)
@@ -91,21 +91,42 @@ class MoveMediator:
 
         # bar move
         if isinstance(from_stack, Bar):
-            self.proccess_bar(from_stack, to_stack)
-            return
+            moved_stone, hit_stone = self.proccess_bar(from_stack, to_stack)
+            return moved_stone, hit_stone
 
-        # bearing off
+        stone = self._board.get_stack(from_stack).peek_stone()
+
+        # bearing off home is incexed 0 for black and 25 for white
         if self.can_bear_off(current_player):
             if (current_player == "white" and to_stack == 25) or (current_player == "black" and to_stack == 0):
                 self._board.move_stone(stone, self._board.get_home[stone.color])
-                return
+                return stone, None
 
         # hitting
         if self._is_hit(to_stack, current_player):
-            self.hit_stone(to_stack)
+            hit_stone = self.hit_stone(to_stack)
 
+        # Basic condition
         self._board.move_stone(stone, to_stack)
+        return stone, hit_stone 
 
+    def move_stone(self, stone: Stone, from_stack: Union[int, Bar, Home], to_stack: Union[int, Bar, Home]):
+        """Bypasses full validation logic. Used for undo operations."""
+        # skip validation here — it's just state reversal.
+        # handle special removal (e.g., from Home)
+       
+        if isinstance(from_stack, Home):
+            from_stack.force_remove_stone(stone)
+        else:
+            from_stack.remove_stone(stone)
+
+        if isinstance(to_stack, int):
+            target_stack = self._board.get_stack(to_stack)
+            target_stack.add_stone(stone)
+            self._board.update_stone_location(stone, target_stack)
+        else:
+            to_stack.add_stone(stone)
+            self._board.update_stone_location(stone, to_stack)
 
     def hit_stone(self, to_stack: int) -> Optional[Stone]:
 
@@ -120,17 +141,20 @@ class MoveMediator:
 
         return None
 
-    def proccess_bar(self, from_bar: Bar, to_stack: int) -> None:
+    def proccess_bar(self, from_bar: Bar, to_stack: int) -> tuple[Stone, Optional[Stone]]:
         current_player = self._game_state.get_current_player()
         
-        stone = from_bar.get_stones(current_player).pop()
+        stone = from_bar.get_stones(current_player)[-1]
+        hit_stone = None
 
         if self._is_hit(to_stack, current_player):
-            stone = self._board.get_stack(to_stack).peek_stone()
-            self._board.move_stone(stone, self._board.get_bar)
+            hit_stone = self._board.get_stack(to_stack).peek_stone()
+            self._board.move_stone(hit_stone, self._board.get_bar)
         
+        from_bar.remove_stone(stone)
         self._board.get_stack(to_stack).add_stone(stone)
         self._board.update_stone_location(stone, self._board.get_stack(to_stack))
+        return stone, hit_stone
 
     def _no_stones_behind(self, from_stack: int, color: str) -> bool:
         #  handles overshoot when bearing off

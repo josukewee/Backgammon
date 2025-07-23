@@ -15,6 +15,9 @@ class Bar(StoneContainer):
     def remove_stone(self, stone: Stone):
         self._bars[stone.get_color].remove(stone)
 
+    def get_stones(self, color: str) -> Stone:
+        return self._bars[color]
+
     def get_bar(self, color: str):
         self._bars[color]
 

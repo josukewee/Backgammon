@@ -80,12 +80,8 @@ class Board:
         else:
             raise TypeError(f"Invalid target type: {type(target)}")
 
-
-    def move_to_home(self, stone: Stone) -> None:
-        origin = self._stone_location[stone]
-        origin.remove_stone(stone)
-        self._home[stone.color].add_stone(stone)
-        self._stone_location[stone] = self._home
+    def update_stone_location(self, stone: Stone, location: Union[Stack, Bar, Home]) -> None:
+        self._stone_location[stone] = location
 
 
     # GETTERS
