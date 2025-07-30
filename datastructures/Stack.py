@@ -8,10 +8,17 @@ class Stack(StoneContainer):
 
     def __init__(self, index, *stones: Stone):
         self.index = index
-        self._elements = deque(stones, maxlen = 5)
+        self._elements = deque(maxlen = 5)
+
+        for stone in stones:
+            self.add_stone(stone)
 
     def add_stone(self, stone: Stone) -> bool:
+        if not isinstance(stone, Stone):
+            raise TypeError(f"Expected Stone, got {type(stone).__name__}")
+        
         self._elements.append(stone)
+
 
     def remove_last_stone(self) -> Stone:
         return self._elements.pop()

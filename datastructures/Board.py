@@ -89,7 +89,7 @@ class Board:
         return self._stone_location.get(stone)
     
     def get_stack(self, index: int) -> Stack:
-        if not (1 <= index <= self.NUM_POINTS):
+        if not (1 <= index <= 24):
             raise ValueError(f"Stack index {index} out of range")
         return self._stacks[index - 1]
 
@@ -109,13 +109,13 @@ class Board:
         return self._home
     
 
-def test():
-    board = Board()
-    # print(board._stone_location)
-    # for stack in board.get_stacks:
-    print(board._stone_location)
-    some_stone = board._stacks[0].peek_piece()
-    board.move_stone(some_stone, 3)
-    print(board._stone_location)
+# def test():
+#     board = Board()
+#     # print(board._stone_location)
+#     # for stack in board.get_stacks:
+#     print(board._stone_location)
+#     some_stone = board._stacks[0].peek_piece()
+#     board.move_stone(some_stone, 3)
+#     print(board._stone_location)
 
-test()
+# test()
