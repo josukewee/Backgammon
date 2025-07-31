@@ -1,11 +1,12 @@
 import pygame as pg
 from commands.MoveCommand import MoveCommand
 from commands.CommandManager import CommandManager
-from datastructures.moveMediator import MoveMediator
-from presentation.InputHandler import InputHandler
+from core.eventHandler import eventHandler
+from core.moveMediator import MoveMediator
+from core.InputHandler import InputHandler
 from presentation.Renderer import Renderer
 from datastructures.Board import Board
-from datastructures.GameState import GameState
+from core.gameState import GameState
 import time
 
 
@@ -18,10 +19,11 @@ class GameEngine:
         self.board = Board()
         self.game_state = GameState()
         self.mediator = MoveMediator(self.board, self.game_state)
+        self.eventHandler = eventHandler()
 
         # Renderer (subscribed to mediator events)
         self.renderer = Renderer()
-        self.input_handler = InputHandler(self.renderer)
+        self.input_handler = InputHandler(self.renderer, self.eventHandler)
 
         # Command history
         self.command_manager = CommandManager()

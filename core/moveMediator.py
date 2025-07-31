@@ -1,7 +1,7 @@
 from typing import Optional, Union
 from datastructures.Bar import Bar
 from datastructures.Board import Board
-from datastructures.GameState import GameState
+from core.gameState import GameState
 from datastructures.Home import Home
 from datastructures.Stone import Stone
 

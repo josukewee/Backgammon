@@ -40,6 +40,7 @@ class Renderer:
         self.dirty = True
         self.font = pg.font.SysFont("Arial", 20)  # You can pick size and font
         self.text_color = (0, 0, 0)
+        self.highlighted_stack = None
 
         # might not be the place to be
         pg.font.init()
@@ -51,7 +52,9 @@ class Renderer:
             "black_stone": self._load_image("black_got.png"),
             "white_highligh": self._load_image("white_highlight.png"),
             "white_highligh": self._load_image("black_highlight.png"),
-            "board": pg.Surface((800, 600))
+            "board": pg.Surface((800, 600)),
+            "highlight_stack_buttom": self._load_image("destination_light_bottom.png"),
+            "highlight_stack_top": self._load_image("destination_light.png")
 
         }
     
@@ -74,9 +77,25 @@ class Renderer:
         if self.static_surface is None:
             self.static_surface = pg.Surface((self.WIDTH, self.HEIGHT), pg.SRCALPHA)
         
-        # Draw everything to the buffer
-        self._draw_board(self.static_surface)
-        self._draw_stones(self.static_surface)
+
+        # redraw static background and stones
+        self._draw_board(self.screen)
+        self._draw_stones(self.screen)
+
+        # draw highlight if active
+        if self.highlighted_stack:
+            rect = self._stack_rect(self.highlighted_stack)
+            if 1 <= self.highlighted_stack <= 13:
+                scaled_highlight = pg.transform.smoothscale(
+                    self.assets["highlight_stack_buttom"], rect.size
+                )
+            else:
+                scaled_highlight = pg.transform.smoothscale(
+                    self.assets["highlight_stack_top"], rect.size
+                )
+            self.screen.blit(scaled_highlight, rect.topleft)
+
+        pg.display.flip()
         
         # Blit to screen
         self.screen.blit(self.static_surface, (0, 0))
@@ -94,8 +113,8 @@ class Renderer:
         stone = self._get_stone_at_position(from_pos)
         self.animations.append(StoneAnimation(stone, start_px, end_px))
 
-    def highlight_stack(self, stack_id: int):
-        position = self._stack_to_pixels(stack_id)
+    def highlight_stack(self, stack_id: Union[int, None]):
+       self.highlighted_stack = stack_id
 
     def get_stack_from_pos(self, pos: tuple[int, int]) -> Union[int, None]:
         for stack_id in range(1, 25):

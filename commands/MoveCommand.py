@@ -2,7 +2,7 @@ from typing import Optional, Union
 from commands.command import Command
 from datastructures.Bar import Bar
 from datastructures.Stone import Stone
-from datastructures.moveMediator import MoveMediator
+from core.moveMediator import MoveMediator
 
 
 class MoveCommand(Command):

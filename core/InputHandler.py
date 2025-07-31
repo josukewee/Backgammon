@@ -1,12 +1,16 @@
 import pygame as pg
 from typing import Optional, Tuple
 
+from core import eventHandler
 from presentation.Renderer import Renderer
 
 class InputHandler:
-    def __init__(self, renderer: Renderer):
+    def __init__(self, renderer: Renderer, eventHandler: eventHandler):
         self.renderer = renderer
         self.selected_stack: Optional[int] = None
+        self.eventHandler = eventHandler
+
+        self._selected_stack = None
 
     def process_events(self) -> bool:
         """Process all pygame events. Returns False if the game should quit."""
@@ -16,9 +20,10 @@ class InputHandler:
             
             if event.type == pg.MOUSEBUTTONDOWN and event.button == 1:  # Left click
                 stack_id = self.renderer.get_stack_from_pos(event.pos)
-                if stack_id is not None:
+                if stack_id:
                     print(stack_id)
-                    # self._handle_click(stack_id)
+                    self._selected_stack = stack_id
+                    self.renderer.highlight_stack(stack_id)
 
             if event.type == pg.KEYDOWN:
                 if event.key == pg.K_SPACE:  # Roll dice with SPACE
