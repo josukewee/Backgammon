@@ -14,46 +14,76 @@ class MoveMediator:
         self._game_state = game_state
 
     def validate_move(self, from_stack: Union[int, Bar], to_stack: int) -> bool:
-        # handles move conditions
-        
         current_player = self._game_state.get_current_player
         current_dice = self._game_state.get_current_dice
 
-        # are there stones on the bar that must be re-entered first? (Board)
+        # If bar has stones, must re-enter
         if self._board.get_bar_stones(current_player):
             if not isinstance(from_stack, Bar):
                 return False
-    
-        distance = self._calculate_distance(from_stack, to_stack, current_player)
 
-        # does the dice roll permit this move distance? 
+        # Calculate distance
+        try:
+            distance = self._calculate_distance(from_stack, to_stack, current_player)
+        except ValueError:
+            return False  # Invalid direction or overshoot not allowed
+
+        # Check if dice allow this move (except overshoot for bear-off)
         if distance not in current_dice:
-            return False
-        
-        # handling right condition of bearing off
-        if self.can_bear_off(current_player):
-            if (current_player == "white" and to_stack == 25) or (current_player == "black" and to_stack == 0):
-                # Allow overshoot if no stones are behind
-                if self._no_stones_behind(from_stack, current_player):
-                    max_die = max(current_dice)
-                    if distance > max_die:
-                        return True
-                            
-        # dest availability
-        destination_stack = self._board.get_stack(to_stack)
-        top_stones = destination_stack.get_stones
+            # Allow overshoot ONLY if bearing off and no stones behind
+            if not (self.can_bear_off(current_player) and
+                    self._is_bear_off_move(from_stack, to_stack, distance, current_dice, current_player)):
+                return False
 
-        if not top_stones:
+        # Validate destination
+        # 1. Bearing off
+        if self._is_bearing_off(to_stack, current_player):
+            return self.can_bear_off(current_player)
+
+        # 2. Normal move
+        destination_stack = self._board.get_stack(to_stack)
+        stones = destination_stack.get_stones
+
+        # Empty → allowed
+        if not stones:
             return True
-        
-        if len(top_stones) == 1:
+
+        # Same color and < 5 stones → allowed
+        if stones[0].get_color == current_player and len(stones) < 5:
             return True
-        
-        if top_stones[0].get_color == current_player:
+
+        # Hit: one stone of opposite color
+        if len(stones) == 1 and stones[0].get_color != current_player:
             return True
-        
-        # all other conditions like distance is not rolled dice, there are stones behind when overshooting with bearing off
+
+        # Otherwise, blocked
         return False
+
+    def _is_bearing_off(self, to_stack: int, player_color: str) -> bool:
+        return (player_color == "white" and to_stack == 25) or \
+            (player_color == "black" and to_stack == 0)
+
+    def _is_bear_off_move(self, from_stack: int, to_stack: int, distance: int, dice: list[int], player_color: str) -> bool:
+        """
+        Determines if an overshoot is allowed during bearing off.
+        Conditions:
+        - Player is in bear-off state (all stones in home board)
+        - The target stack is the bear-off zone (25 for white, 0 for black)
+        - No stones are behind the from_stack
+        - Distance is greater than all dice values (overshoot)
+        """
+        # Check if it's going to the bear-off "stack"
+        if player_color == "white" and to_stack != 25:
+            return False
+        if player_color == "black" and to_stack != 0:
+            return False
+
+        # Check no stones behind
+        if not self._no_stones_behind(from_stack, player_color):
+            return False
+
+        # Overshoot only if distance is greater than all dice values
+        return distance > max(dice)
 
     def can_bear_off(self, color) -> bool:
         # all the stones are in the home(last 5 stacks)
@@ -73,7 +103,6 @@ class MoveMediator:
     def execute_move(self, from_stack: Union[int, Bar], to_stack: int) -> tuple[Stone, Optional[Stone]]:
         """Performs a legal move including hit, move, or bearing off."""
         current_player = self._game_state.get_current_player
-        current_dice = self._game_state.get_current_dice
         hit_stone = None
 
         # validate move
@@ -82,12 +111,12 @@ class MoveMediator:
         
         distance = self._calculate_distance(from_stack, to_stack, current_player)
 
-        if distance in current_dice:
-            current_dice.remove(distance)
-        else:
-            # overshoot since we know it's allowed due to validate_move
-            max_die = max(current_dice)
-            current_dice.remove(max_die)
+        # if distance in current_dice:
+        #     current_dice.remove(distance)
+        # else:
+        #     # overshoot since we know it's allowed due to validate_move
+        #     max_die = max(current_dice)
+        #     current_dice.remove(max_die)
 
         # bar move
         if isinstance(from_stack, Bar):
@@ -106,8 +135,19 @@ class MoveMediator:
         if self._is_hit(to_stack, current_player):
             hit_stone = self.hit_stone(to_stack)
 
+        print(f"DEBUG: About to move stone from stack {from_stack} to {to_stack}")
+        print(f"DEBUG: stone ref: {stone}, color: {stone.get_color}")
+        print(f"DEBUG: board location of stone: {self._board._stone_location.get(stone)}")
+
         # Basic condition
         self._board.move_stone(stone, to_stack)
+
+        print("DEBUG BOARD STATE:")
+        for i in range(1, 25):
+            stones = [s.get_color for s in self._board.get_stack(i).get_stones]
+            if stones:
+                print(f"Stack {i}: {stones}")
+            print(self._board._bar)
         return stone, hit_stone 
 
     def move_stone(self, stone: Stone, from_stack: Union[int, Bar, Home], to_stack: Union[int, Bar, Home]):
@@ -130,7 +170,7 @@ class MoveMediator:
 
     def hit_stone(self, to_stack: int) -> Optional[Stone]:
 
-        current_player = self._game_state.get_current_player()
+        current_player = self._game_state.get_current_player
 
         if self._is_hit(to_stack, current_player):
             stack = self._board.get_stack(to_stack)
@@ -142,7 +182,7 @@ class MoveMediator:
         return None
 
     def proccess_bar(self, from_bar: Bar, to_stack: int) -> tuple[Stone, Optional[Stone]]:
-        current_player = self._game_state.get_current_player()
+        current_player = self._game_state.get_current_player
         
         stone = from_bar.get_stones(current_player)[-1]
         hit_stone = None
@@ -168,37 +208,39 @@ class MoveMediator:
 
         for i in behind_range:
             for stone in stacks[i].get_stones():
-                if stone.get_color() == color:
+                if stone.get_color == color:
                     return False
         return True
 
-    def _calculate_distance(self, from_stack: Union[int, Bar], to_stack: int, player_color: str) -> int:
-        
-        if isinstance(from_stack, int):
+    def _calculate_distance(self, from_stack: int, to_stack: int, player_color: str) -> int:
+        # Special case: bearing off
+        if to_stack == 25 and player_color == "white":
+            return from_stack  # white moves from_stack pips to bear off
+        if to_stack == 0 and player_color == "black":
+            return 25 - from_stack  # black moves remaining distance to bear off
 
-            if not (1 <= from_stack <= 24 and 1 <= to_stack <= 24):
-                raise ValueError("Stack indexes must be in range 1 to 24")
-            
-            distance = to_stack - from_stack if player_color == "white" else from_stack - to_stack
-        
-        elif isinstance(from_stack, Bar):
-            entry_point = 0 if player_color == "white" else 25
-            distance = abs(to_stack - entry_point)
-
+        # Normal move
+        if player_color == "white":
+            distance = from_stack - to_stack
         else:
-            raise TypeError("from_stack must be type of int or Bar")
-        
+            distance = to_stack - from_stack
+
+        # If invalid direction or same point
         if distance <= 0:
-                raise ValueError(f"Invalid move direction for {player_color}. Distance: {distance}")
-        
+            return -1  # indicate invalid move
         return distance
+
 
     def _is_hit(self, to_stack: int, player_color: str) -> bool:
         stack = self._board.get_stack(to_stack)
+
+        if stack.is_empty():
+            return False
+
         top_stone = stack.peek_stone()
 
-        if top_stone and len(stack.get_stones()) == 1:
-            return top_stone.get_color() != player_color
+        if top_stone and len(stack.get_stones) == 1:
+            return top_stone.get_color != player_color
 
         return False
     

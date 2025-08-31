@@ -29,6 +29,9 @@ class Stack(StoneContainer):
     def peek_stone(self) -> Stone:
         return self._elements[-1]
     
+    def is_empty(self) -> bool:
+        return len(self._elements) == 0
+    
     @property
     def get_stones(self):
         return self._elements
@@ -36,3 +39,6 @@ class Stack(StoneContainer):
     def __repr__(self):
         stones_list = [repr(stone) for stone in self._elements]
         return f"Stack {self.index}"
+    
+    def __iter__(self):
+        return iter(self._elements)

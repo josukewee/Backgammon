@@ -39,8 +39,8 @@ class GameState:
     # --- Win Conditions ---
     def check_winner(self, board: Board) -> Optional[str]:
         """Returns "white", "black", or None if no winner yet."""
-        if board.home.has_all_pieces("white"):
+        if board._home.has_all_pieces("white"):
             self._winner = "white"
-        elif board.home.has_all_pieces("black"):
+        elif board._home.has_all_pieces("black"):
             self._winner = "black"
         return self._winner

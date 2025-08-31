@@ -30,17 +30,19 @@ class Renderer:
     RED = (250, 0, 0)
     BLACK = (0, 0, 0)
 
-    def __init__(self, screen_width: int = WIDTH, screen_height: int = HEIGHT):
+    def __init__(self, board: Board, screen_width: int =WIDTH, screen_height: int = HEIGHT):
         # for testing only
-        self.board = Board()
+        self.board = board
+        
         self.screen = pg.display.set_mode((screen_width, screen_height))
         self.assets = self._load_assets()
         self.animations: List[StoneAnimation] = []
-        self.static_surface = None
+        self.static_surface = pg.Surface((self.WIDTH, self.HEIGHT), pg.SRCALPHA)
+        self.dynamic_surface = pg.Surface((self.WIDTH, self.HEIGHT), pg.SRCALPHA)
         self.dirty = True
         self.font = pg.font.SysFont("Arial", 20)  # You can pick size and font
         self.text_color = (0, 0, 0)
-        self.highlighted_stack = None
+        self.highlighted_stacks = []
 
         # might not be the place to be
         pg.font.init()
@@ -73,48 +75,53 @@ class Renderer:
             print("Error occured", e)
             
     def init(self):
-        # Initialize static_surface (if not done already)
-        if self.static_surface is None:
-            self.static_surface = pg.Surface((self.WIDTH, self.HEIGHT), pg.SRCALPHA)
         
 
         # redraw static background and stones
-        self._draw_board(self.screen)
-        self._draw_stones(self.screen)
-
-        # draw highlight if active
-        if self.highlighted_stack:
-            rect = self._stack_rect(self.highlighted_stack)
-            if 1 <= self.highlighted_stack <= 13:
-                scaled_highlight = pg.transform.smoothscale(
-                    self.assets["highlight_stack_buttom"], rect.size
-                )
-            else:
-                scaled_highlight = pg.transform.smoothscale(
-                    self.assets["highlight_stack_top"], rect.size
-                )
-            self.screen.blit(scaled_highlight, rect.topleft)
-
-        pg.display.flip()
+        self._draw_board(self.static_surface)
         
         # Blit to screen
         self.screen.blit(self.static_surface, (0, 0))
         pg.display.flip()
 
-    def on_board_change(self, change_type: str, *args) -> None:
-        if change_type == "move":
-            from_pos, to_pos = args
-            self._start_animation(from_pos, to_pos)
-        self.dirty = True
+    def draw_frame(self):
+        
+        self.dynamic_surface.fill((0, 0, 0, 0))
+        
+        # Draw dynamic elements
+        self._draw_stones(self.dynamic_surface)
+        if len(self.highlighted_stacks) != 0:
+            # print(f"DEBUG Highlight stacks: {self.highlighted_stacks}")
+            self._draw_highlight()
 
-    def _start_animation(self, from_pos: int, to_pos: int) -> None:
-        start_px = self._stack_to_pixels(from_pos)
-        end_px = self._stack_to_pixels(to_pos)
-        stone = self._get_stone_at_position(from_pos)
-        self.animations.append(StoneAnimation(stone, start_px, end_px))
+        # Combine layers
+        self.screen.blit(self.static_surface, (0, 0))
+        self.screen.blit(self.dynamic_surface, (0, 0))
 
-    def highlight_stack(self, stack_id: Union[int, None]):
-       self.highlighted_stack = stack_id
+        # Update display
+        pg.display.flip() 
+
+    # setter for hilighted stack
+    def highlight_stacks(self, stack_ids: list[int]):
+        self.highlighted_stacks = stack_ids
+
+    def clear_highlights(self):
+        self.highlighted_stacks = []
+        
+    def _draw_highlight(self):
+        # print(self.highlighted_stacks)
+        if self.highlighted_stacks:  # now a list
+            for stack_id in self.highlighted_stacks:
+                rect = self._stack_rect(stack_id)
+                if 1 <= stack_id <= 13:
+                    scaled_highlight = pg.transform.smoothscale(
+                        self.assets["highlight_stack_buttom"], rect.size
+                    )
+                else:
+                    scaled_highlight = pg.transform.smoothscale(
+                        self.assets["highlight_stack_top"], rect.size
+                    )
+                self.dynamic_surface.blit(scaled_highlight, rect.topleft)
 
     def get_stack_from_pos(self, pos: tuple[int, int]) -> Union[int, None]:
         for stack_id in range(1, 25):
@@ -184,43 +191,19 @@ class Renderer:
 
 
 
-    def update(self, dt: float) -> None:
-        self._update_animations(dt)
-        if self.dirty or self.animations:
-            self._redraw()
-
-    def _update_animations(self, dt: float) -> None:
-        for anim in self.animations[:]:
-            if anim.update(dt):
-                self.animations.remove(anim)
-                self.dirty = True
-
-    def _redraw(self) -> None:
-        if self.dirty:
-            self._draw_static_elements()
-            self.dirty = False
-        
-        self.screen.blit(self.static_surface, (0, 0))
-        self._draw_animations()
-        pg.display.flip()
-
-    def _draw_static_elements(self) -> None:
-        self.static_surface = pg.Surface((800, 600), pg.SRCALPHA)
-        self._draw_board(self.static_surface)
-        self._draw_stones(self.static_surface)
 
         
-    def _draw_board(self, screen):
+    def _draw_board(self, surface):
         color = self.WHITE_COLUMN
-        screen.fill(self.LITE_BROWN)
+        surface.fill(self.LITE_BROWN)
         for c in range(self.WIDTH_BOARD):
             for r in range(self.HEIGHT_BOARD):
                 #outline
                 if r == 0 or c == 0 or c == self.WIDTH_BOARD-1 or r == self.HEIGHT_BOARD-1 or c == 7:
-                    pg.draw.rect(screen, self.COLOR1, pg.Rect(c*self.SQ_SIZE, r*self.SQ_SIZE, self.SQ_SIZE, self.SQ_SIZE))
+                    pg.draw.rect(surface, self.COLOR1, pg.Rect(c*self.SQ_SIZE, r*self.SQ_SIZE, self.SQ_SIZE, self.SQ_SIZE))
                 #triangles
                 elif r == 1:
-                    pg.draw.polygon(screen, color,
+                    pg.draw.polygon(surface, color,
                                 [(c * self.SQ_SIZE, r * self.SQ_SIZE), ((c + 1) * self.SQ_SIZE, r * self.SQ_SIZE),
                                     (c * self.SQ_SIZE + 0.5 * self.SQ_SIZE, 6 * self.SQ_SIZE)])
                     if color == self.WHITE_COLUMN:
@@ -228,16 +211,15 @@ class Renderer:
                     else:
                         color = self.WHITE_COLUMN
                 elif r == 11:
-                    pg.draw.polygon(screen, color,
+                    pg.draw.polygon(surface, color,
                                 [(c * self.SQ_SIZE, (r+1) * self.SQ_SIZE), ((c + 1) * self.SQ_SIZE, (r+1) * self.SQ_SIZE),
                                     (c * self.SQ_SIZE + 0.5 * self.SQ_SIZE, 7 * self.SQ_SIZE)])
                 #to test a grid
                 # pg.draw.rect(screen, self.RED, pg.Rect(c * self.SQ_SIZE, r * self.SQ_SIZE, self.SQ_SIZE, self.SQ_SIZE), 2)
 
 
-        pg.draw.line(screen, self.BLACK, (7.5*self.SQ_SIZE, 0), (7.5*self.SQ_SIZE, self.HEIGHT_BOARD*self.SQ_SIZE), 10)
-        pg.draw.rect(screen, self.RED, pg.Rect(c * self.SQ_SIZE, r * self.SQ_SIZE, self.SQ_SIZE, self.SQ_SIZE), 2)
-        pg.display.flip()
+        pg.draw.line(surface, self.BLACK, (7.5*self.SQ_SIZE, 0), (7.5*self.SQ_SIZE, self.HEIGHT_BOARD*self.SQ_SIZE), 10)
+        pg.draw.rect(surface, self.RED, pg.Rect(c * self.SQ_SIZE, r * self.SQ_SIZE, self.SQ_SIZE, self.SQ_SIZE), 2)
 
     def _draw_stones(self, surface: pg.Surface) -> None:
         for stack_id in range(1, 25):
@@ -263,6 +245,37 @@ class Renderer:
 
     def _is_animating(self, stone: object) -> bool:
         return any(anim.stone == stone for anim in self.animations)
+    
+    def on_board_change(self, change_type: str, *args) -> None:
+        if change_type == "move":
+            from_pos, to_pos = args
+            self._start_animation(from_pos, to_pos)
+        self.dirty = True
+
+    def update(self, dt: float) -> None:
+        self._update_animations(dt)
+        if self.dirty or self.animations:
+            self._redraw()
+
+    def _update_animations(self, dt: float) -> None:
+        for anim in self.animations[:]:
+            if anim.update(dt):
+                self.animations.remove(anim)
+                self.dirty = True
+
+    def _redraw(self) -> None:
+        if self.dirty:
+            self._draw_static_elements()
+            self.dirty = False
+        
+        self.screen.blit(self.static_surface, (0, 0))
+        self._draw_animations()
+        pg.display.flip()
+    def _start_animation(self, from_pos: int, to_pos: int) -> None:
+        start_px = self._stack_to_pixels(from_pos)
+        end_px = self._stack_to_pixels(to_pos)
+        stone = self._get_stone_at_position(from_pos)
+        self.animations.append(StoneAnimation(stone, start_px, end_px))
     
 def test():
     renderer_test = Renderer()

@@ -24,6 +24,7 @@ class Board:
 
     # probably will need to create an abstract factory if the rules and board is going to be custom, now is not required
     def _init_structures(self):
+        # since the bar implementaion requires stack 0 and 25 might change that in the future
         self._stacks = [Stack(i) for i in range (1, 25)]
 
         self._place_stones()
@@ -79,6 +80,8 @@ class Board:
 
         else:
             raise TypeError(f"Invalid target type: {type(target)}")
+        
+        
 
     def update_stone_location(self, stone: Stone, location: Union[Stack, Bar, Home]) -> None:
         self._stone_location[stone] = location
@@ -89,12 +92,12 @@ class Board:
         return self._stone_location.get(stone)
     
     def get_stack(self, index: int) -> Stack:
-        if not (1 <= index <= 24):
+        if not (0 <= index <= 25):
             raise ValueError(f"Stack index {index} out of range")
         return self._stacks[index - 1]
 
     def get_bar_stones(self, color: str) -> list[Stone]:
-        return self._bar[color]
+        return self._bar.get_stones(color)
     
     @property
     def get_stacks(self) -> list[Stack]:
