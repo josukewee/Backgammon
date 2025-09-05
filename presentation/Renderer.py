@@ -24,6 +24,7 @@ class Renderer:
 
     ###colors
     LITE_BROWN = (250, 234, 177)
+    WHITE = (255, 255, 255)
     COLOR1 = (197, 137, 64)
     WHITE_COLUMN = (193, 193, 193)
     BLACK_COLUMN = (229, 186, 115)
@@ -40,9 +41,15 @@ class Renderer:
         self.static_surface = pg.Surface((self.WIDTH, self.HEIGHT), pg.SRCALPHA)
         self.dynamic_surface = pg.Surface((self.WIDTH, self.HEIGHT), pg.SRCALPHA)
         self.dirty = True
-        self.font = pg.font.SysFont("Arial", 20)  # You can pick size and font
+
         self.text_color = (0, 0, 0)
         self.highlighted_stacks = []
+
+        self.white_bar_rect = pg.Rect(self.SQ_SIZE * 15, self.SQ_SIZE, self.SQ_SIZE, self.SQ_SIZE * 5)
+        self.black_bar_rect = pg.Rect(self.SQ_SIZE * 15, self.SQ_SIZE * 7, self.SQ_SIZE, self.SQ_SIZE * 5)
+
+        self.white_home_rect = pg.Rect(self.SQ_SIZE * 14, self.SQ_SIZE, self.SQ_SIZE, self.SQ_SIZE * 5)
+        self.black_home_rect = pg.Rect(self.SQ_SIZE * 14, self.SQ_SIZE * 7, self.SQ_SIZE, self.SQ_SIZE * 5)        
 
         # might not be the place to be
         pg.font.init()
@@ -87,9 +94,12 @@ class Renderer:
     def draw_frame(self):
         
         self.dynamic_surface.fill((0, 0, 0, 0))
-        
         # Draw dynamic elements
         self._draw_stones(self.dynamic_surface)
+
+        self._draw_bar_stones(self.dynamic_surface)
+        
+        # self.debug_grid(self.dynamic_surface)
         if len(self.highlighted_stacks) != 0:
             # print(f"DEBUG Highlight stacks: {self.highlighted_stacks}")
             self._draw_highlight()
@@ -127,6 +137,17 @@ class Renderer:
         for stack_id in range(1, 25):
             if self._stack_rect(stack_id).collidepoint(pos):
                 return stack_id
+            
+        if self.white_home_rect.collidepoint(pos):
+            return 25
+        if self.black_home_rect.collidepoint(pos):
+            return 0
+        
+        # bar is unclickable its forced to move from
+        # if self.white_bar_rect.collidepoint(pos):
+        #     return "white_bar"
+        # if self.black_bar_rect.collidepoint(pos):
+        #     return "black_bar"
         return None
 
     def _stack_rect(self, stack_id: int) -> pg.Rect:
@@ -189,9 +210,6 @@ class Renderer:
 
         return int(x), int(y)
 
-
-
-
         
     def _draw_board(self, surface):
         color = self.WHITE_COLUMN
@@ -229,14 +247,58 @@ class Renderer:
                 if not self._is_animating(stone):
                     base_x, base_y = self._stack_to_pixels(stack_id)
 
-                    # Bottom half (1–12): stack upwards
+                    # bottom half (1–12): stack upwards
                     if 1 <= stack_id <= 12:
                         pos = (base_x, base_y - i * self.SQ_SIZE)
-                    # Top half (13–24): stack downwards
+                    # top half (13–24): stack downwards
                     else:
                         pos = (base_x, base_y + i * self.SQ_SIZE)
 
                     surface.blit(self.assets[f"{color}_stone"], pos)
+
+    def _draw_bar_stones(self, surface: pg.Surface):
+        bar = self.board.get_bar
+        white_stones = bar.get_stones("white")
+        black_stones = bar.get_stones("black")
+
+        x_black = self.black_bar_rect.x
+        top_y_black = self.black_bar_rect.top
+        bottom_y_black = self.black_bar_rect.bottom - self.SQ_SIZE
+
+        x_white = self.white_bar_rect.x
+        top_y_white = self.white_bar_rect.top
+        bottom_y_white = self.white_bar_rect.bottom - self.SQ_SIZE
+
+        # draw white stones from top down
+        for i, stone in enumerate(white_stones):
+            pos = (x_white, top_y_white + i * self.SQ_SIZE)
+            surface.blit(self.assets["white_stone"], pos)
+
+        # draw black stones from bottom up
+        for i, stone in enumerate(black_stones):
+            pos = (x_black, bottom_y_black - i * self.SQ_SIZE)
+            surface.blit(self.assets["black_stone"], pos)
+
+
+    def debug_grid(self, surface):
+        """Draw a grid that fills the entire screen"""
+        # calculate how many squares fit in width and height
+        num_cols = self.WIDTH // self.SQ_SIZE
+        num_rows = self.HEIGHT // self.SQ_SIZE
+        
+        # Draw grid lines
+        for c in range(num_cols + 1): 
+            for r in range(num_rows + 1):
+                # draw grid cell outline
+                pg.draw.rect(surface, self.RED, 
+                            pg.Rect(c * self.SQ_SIZE, r * self.SQ_SIZE, 
+                                    self.SQ_SIZE, self.SQ_SIZE), 2)
+        pg.draw.rect(surface, self.WHITE_COLUMN, self.white_bar_rect)
+        pg.draw.rect(surface, self.BLACK, self.black_bar_rect)
+
+        pg.draw.rect(surface, self.WHITE_COLUMN, self.white_home_rect)
+        pg.draw.rect(surface, self.BLACK, self.black_home_rect)
+
 
     def _draw_animations(self) -> None:
         for anim in self.animations:
@@ -277,27 +339,27 @@ class Renderer:
         stone = self._get_stone_at_position(from_pos)
         self.animations.append(StoneAnimation(stone, start_px, end_px))
     
-def test():
-    renderer_test = Renderer()
-        # Initialize
-    pg.init()
-    renderer = Renderer()
-    clock = pg.time.Clock()
+# def test():
+#     renderer_test = Renderer()
+#         # Initialize
+#     pg.init()
+#     renderer = Renderer()
+#     clock = pg.time.Clock()
     
-    # Force-draw one white stone at position 1 (for testing)
-    renderer.board.get_stack(1).add_stone("white")  # Mock a stone
+#     # Force-draw one white stone at position 1 (for testing)
+#     renderer.board.get_stack(1).add_stone("white")  # Mock a stone
     
-    # Main loop
-    running = True
-    while running:
-        for event in pg.event.get():
-            if event.type == pg.QUIT:
-                running = False
+#     # Main loop
+#     running = True
+#     while running:
+#         for event in pg.event.get():
+#             if event.type == pg.QUIT:
+#                 running = False
         
-        # Update and render
-        renderer.update(1/60)  # Fixed delta time
+#         # Update and render
+#         renderer.update(1/60)  # Fixed delta time
         
-        # Limit FPS (optional)
-        clock.tick(60)
+#         # Limit FPS (optional)
+#         clock.tick(60)
     
-    pg.quit()
+#     pg.quit()

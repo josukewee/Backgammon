@@ -6,6 +6,7 @@ __pycache__/
 .idea/
 
 venv/
+.python-version
 
 # C extensions
 *.so

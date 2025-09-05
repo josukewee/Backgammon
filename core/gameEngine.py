@@ -1,3 +1,4 @@
+from datastructures.Bar import Bar
 import pygame as pg
 from typing import List, Optional
 
@@ -26,25 +27,27 @@ class GameEngine:
         pg.init()
         self.clock = pg.time.Clock()
 
-        # Core domain state
+        # core domain state
         self.board = Board()
         self.game_state = GameState()
         self.mediator = MoveMediator(self.board, self.game_state)
 
-        # Events & presentation
+        # events & presentation
         self.events = eventHandler()
         self.renderer = Renderer(self.board)
         self.input_handler = InputHandler(self.renderer, self.events)
 
-        # Turn state
+        # turn state
         self.turn_active: bool = False
-        self.moves_remaining: List[int] = []  # pip values left to spend this turn
+        self.moves_remaining: List[int] = []  
 
         self.running = True
 
-    # -----------------------
+        self._state = "IDLE"            # IDLE | STACK_SELECTED
+        self._selected_stack = None       
+
+
     # Main loop
-    # -----------------------
     def run(self):
         self.renderer.init()
 
@@ -55,14 +58,14 @@ class GameEngine:
             # Main turn loop
             while self.turn_active:
                 # try:
-                    # Handle input (mouse, keyboard)
+                    
                     self.input_handler.process_events()
 
                     # Process queued game events (includes StackSelected + MoveEvent)
                     self.process_game_events()
                     self.renderer.draw_frame()
 
-                    # End turn if no moves left or no legal moves
+                    # end turn if no moves left or no legal moves
                     if not self.moves_remaining or not self._any_legal_moves():
                         self._end_turn()
 
@@ -79,21 +82,42 @@ class GameEngine:
         pg.quit()
 
 
-    # -----------------------
-    # Turn management
-    # -----------------------
+
+    # turn management
     def _start_turn(self) -> None:
-        current = self.game_state.get_current_player
-        dice = self.game_state.roll_dice()  # tuple from GameState
+        current_player = self.game_state.get_current_player
+        dice = self.game_state.roll_dice() 
         self.moves_remaining = self._explode_dice(dice)
-        # Keep GameState._dice in sync (so MoveMediator.validate_move can read it)
+        
+        # keep GameState._dice in sync (so MoveMediator.validate_move can read it)
         self._set_game_dice(tuple(self.moves_remaining))
         self.turn_active = True
-        print(f"\n--- {current}'s turn --- rolled {dice} → moves {self.moves_remaining}")
+        print(f"\n--- {current_player}'s turn --- rolled {dice} → moves {self.moves_remaining}")
 
-        # Optional: immediate pass if literally nothing legal
+        bar_stones = self.board.get_bar_stones(current_player)
+        if bar_stones:
+            print(f"DEBUG: {current_player} has {len(bar_stones)} stone(s) on bar → forcing re-entry")
+
+            # compute destinations as if "BarSelected"
+            destinations = []
+            for to_stack in range(1, 25):
+                if self.mediator.validate_move(self.board.get_bar, to_stack):
+                    destinations.append(to_stack)
+
+            if destinations:
+                self.events.append({
+                    "type": "BarSelected",
+                    "stack_id": "BAR",  
+                    "destinations": destinations,
+                })
+                self.renderer.highlight_stacks(destinations)
+            else:
+                # no legal moves from bar → skip turn immediately
+                print(f"DEBUG: {current_player} cannot re-enter → turn skipped")
+                self._end_turn()
+
         if not self._any_legal_moves():
-            print(f"{current} has no legal moves. Passing turn.")
+            print(f"{current_player} has no legal moves. Passing turn.")
             self._end_turn()
 
     def _end_turn(self) -> None:
@@ -102,51 +126,82 @@ class GameEngine:
             return
         self.turn_active = False
         self.moves_remaining = []
-        self._set_game_dice(tuple())  # no pips available between turns
+        self._set_game_dice(tuple()) 
         self.game_state.next_turn()
 
-    @staticmethod
-    def _explode_dice(dice: tuple[int, int]) -> List[int]:
-        """Turn (a, b) into [a, b] or [a, a, a, a] for doubles."""
-        a, b = dice
-        # in case i want the doubles to be doubled
-        # return [a, a, a, a] if a == b els e [a, b]
 
-        return [a, b]
 
-    def _set_game_dice(self, dice_tuple: tuple[int, ...]) -> None:
-        """
-        Keep mediator-visible dice in sync. (Ideally expose a setter in GameState;
-        for now we assign the private field.)
-        """
-        self.game_state._dice = dice_tuple  # type: ignore[attr-defined]
 
-    # -----------------------
     # Event processing
-    # -----------------------
     def process_game_events(self) -> None:
         """Process all queued events and apply game logic."""
         while not self.events.empty_events():
             event = self.events.pop_event()
             print("DEBUG popped event:", event)
 
-            if event["type"] == "StackSelected":
-                # Highlight possible destinations
-                stack_id = event["stack_id"]
-                possible_moves = self._get_valid_destinations(stack_id)
-                print(f"DEBUG Highlight stacks: {possible_moves}")
-                self.renderer.highlight_stacks(possible_moves)
+            if event["type"] == "ClickStack":
+                self._handle_click_stack(event["stack_id"])
+
+            elif event["type"] == "QuitEvent":
+                return False
 
             elif event["type"] == "MoveEvent":
-                # Handle full move (from_stack → to_stack)
+                
                 self._handle_move_event(event)
                 self.renderer.clear_highlights()
             
-            elif event["type"] == "QuitEvent":
-                ...
 
                 
+    def _handle_click_stack(self, stack_id: int) -> None:
+        current_player = self.game_state.get_current_player
 
+        # Case 0: must re-enter from bar
+        if self.board.get_bar.must_reenter(current_player):
+            self._attempt_bar_reentry(stack_id)
+            return
+
+        if self._state == "IDLE":
+            if len(self._get_valid_destinations(stack_id)) and self.board.get_stack_color(stack_id) == current_player:
+                self._selected_stack = stack_id
+                self._state = "STACK_SELECTED"
+                destinations = self._get_valid_destinations(stack_id)
+                print(f"DEBUG: stack {stack_id} selected, possible moves {destinations}")
+                self.renderer.highlight_stacks(destinations)
+            else:
+                print(f"DEBUG: stack {stack_id} has no moves → staying IDLE")
+
+
+        elif self._state == "STACK_SELECTED":
+            if stack_id != self._selected_stack:
+                if stack_id in self._get_valid_destinations(self._selected_stack):
+                    self._handle_move_event({
+                        "type": "MoveEvent",
+                        "from_stack": self._selected_stack,
+                        "to_stack": stack_id
+                    })
+                else:
+                    print(f"DEBUG: invalid move {self._selected_stack} → {stack_id}")
+            # Reset in both cases
+            self._selected_stack = None
+            self._state = "IDLE"
+            self.renderer.clear_highlights()
+
+    # Helpers
+    def _attempt_bar_reentry(self, to_stack: int) -> None:
+        """Handle forced re-entry from bar."""
+        current_player = self.game_state.get_current_player
+        bar = self.board.get_bar
+
+        if self.mediator.validate_move(bar, to_stack):
+            print(f"DEBUG: re-entering {current_player} stone to {to_stack}")
+            self._handle_move_event({
+                "type": "MoveEvent",
+                "from_stack": bar,
+                "to_stack": to_stack
+            })
+            self.renderer.clear_highlights()
+        else:
+            print(f"DEBUG: invalid bar re-entry to {to_stack}")
 
 
     def _handle_move_event(self, ev: dict) -> None:
@@ -157,9 +212,9 @@ class GameEngine:
 
         from_stack = ev.get("from_stack")
         to_stack = ev.get("to_stack")
-        if not isinstance(from_stack, int) or not isinstance(to_stack, int):
-            print("DEBUG: Invalid from/to stack")
-            return
+        # if not isinstance(from_stack, int) or not isinstance(to_stack, int):
+        #     print("DEBUG: Invalid from/to stack")
+        #     return
 
         current = self.game_state.get_current_player  # FIXED HERE
         print(f"DEBUG: Checking move for player {current}")
@@ -173,15 +228,19 @@ class GameEngine:
 
         print("DEBUG: move is allowed")
         moved_stone, _ = self.mediator.execute_move(from_stack, to_stack)
+        if isinstance(from_stack, int):
+            used = self._distance_for_player(from_stack, to_stack, current)
+        elif isinstance(from_stack, Bar):
+            used = self._distance_from_bar(to_stack, current)
+        else:
+            raise ValueError(f"Unsupported from_stack type: {type(from_stack)}")
 
-        used = self._distance_for_player(from_stack, to_stack, current)
+
         print(f"DEBUG: Consuming pip {used}")
         self._consume_pip(used)
 
-
-    # -----------------------
     # Dice consumption
-    # -----------------------
+  
     def _consume_pip(self, distance: int) -> None:
         """
         Remove the used pip from moves_remaining.
@@ -194,26 +253,21 @@ class GameEngine:
             self.moves_remaining.remove(max(self.moves_remaining))
         self._set_game_dice(tuple(self.moves_remaining))
 
-    @staticmethod
-    def _distance_for_player(from_stack: int, to_stack: int, player: str) -> int:
+    def _set_game_dice(self, dice_tuple: tuple[int, ...]) -> None:
         """
-        Mirror MoveMediator._calculate_distance (for int→int case):
-        white moves down (to smaller numbers): distance = from - to
-        black moves up (to larger numbers):  distance = to - from
+        Keep mediator-visible dice in sync. (Ideally expose a setter in GameState;
+        for now we assign the private field.)
         """
-        if player == "white":
-            return from_stack - to_stack
-        return to_stack - from_stack
+        self.game_state._dice = dice_tuple
 
-    # -----------------------
-    # Legal-move probing (simple, fast)
-    # -----------------------
+
+    # Legal-move probing 
     def _any_legal_moves(self) -> bool:
         """
         Quick probe: for each die pip left and each top stone of current player,
-        see if at least one valid destination exists (including simple bear-off target).
-        This avoids turns getting stuck when no moves are possible.
+        see if at least one valid destination exists (including bearing off).
         """
+
         p = self.game_state.get_current_player
         pips = sorted(set(self.moves_remaining), reverse=True)  # try larger first
 
@@ -230,20 +284,24 @@ class GameEngine:
                 continue
 
             for pip in pips:
-                # Try board destination
+                # candidate destination
                 to = s - pip if p == "white" else s + pip
 
-                # Board square
+                # 2. Bearing off
+                if self.mediator.can_bear_off(p):
+                    home_target = 25 if p == "white" else 0
+                    # print("can bear off")
+                    if self.mediator.validate_move(s, home_target):
+                        # print("allowed")
+                        return True
+
+                # 1. Board move
                 if 1 <= to <= 24 and self.mediator.validate_move(s, to):
                     return True
 
-                # Off-board “virtual” target for bear-off (25 for white, 0 for black)
-                if not (1 <= to <= 24):
-                    target_off = 25 if p == "white" else 0
-                    if self.mediator.validate_move(s, target_off):
-                        return True
 
         return False
+
 
     def _any_bar_entry_legal(self, player: str, pips: list[int]) -> bool:
         """When on bar, can we enter with any die?"""
@@ -254,56 +312,67 @@ class GameEngine:
                 return True
         return False
     
-    def _handle_stack_selected(self, stack_id: int):
-        current_player = self._game_state.get_current_player
-
-        # Step 1: Check if stack has stones for current player
-        stack = self.board.get_stack(stack_id)
-        stones = stack.get_stones
-        if not stones or stones[0].get_color != current_player:
-            print("Invalid selection: Not your stack.")
-            return
-
-        # Step 2: Find possible destinations
-        moves = self.game_state.get_current_dice
-        possible_destinations = []
-
-        for move in moves:
-            direction = 1 if current_player == "white" else -1
-            target = stack_id + (move * direction)
-            
-            # Bearing off special case
-            if target < 1 or target > 24:
-                target = 0 if current_player == "black" else 25
-            
-            # Validate with mediator
-            if self.mediator.validate_move(stack_id, target):
-                possible_destinations.append(target)
-
-        # Step 3: Send to renderer
-        self.renderer.highlight_stacks(possible_destinations)
-        print(f"Possible destinations for stack {stack_id}: {possible_destinations}")
-
     def _get_valid_destinations(self, from_stack: int) -> list[int]:
         valid_destinations = []
         current_player = self.game_state.get_current_player
-        direction = -1 if current_player == "white" else 1  # White moves down (24→1), Black moves up (1→24)
+        direction = -1 if current_player == "white" else 1 
 
         for pip in self.moves_remaining:
             candidate = from_stack + (direction * pip)
 
-            # Bear-off logic can be added later; skip out-of-range for now
-            if candidate < 1 or candidate > 24:
-                continue
+            if 1 <= candidate <= 24:
+                if self.mediator.validate_move(from_stack, candidate):
+                    valid_destinations.append(candidate)
 
-            if self.mediator.validate_move(from_stack, candidate):
-                valid_destinations.append(candidate)
+            else:
+                target_off = 25 if current_player == "black" else 0
+                if self.mediator.validate_move(from_stack, target_off):
+                    valid_destinations.append(target_off)
 
         print(f"DEBUG: from_stack {from_stack}, pips {self.moves_remaining}, candidates {valid_destinations}")
-
-
         return valid_destinations
+    
+    @staticmethod
+    def _explode_dice(dice: tuple[int, int]) -> List[int]:
+        """Turn (a, b) into [a, b] or [a, a, a, a] for doubles."""
+        a, b = dice
+        # in case i want the doubles to be doubled
+        # return [a, a, a, a] if a == b els e [a, b]
 
+        return [a, b]
+    
+    @staticmethod
+    def _distance_for_player(from_stack: int, to_stack: int, player: str) -> int:
+        """
+        Mirror MoveMediator._calculate_distance (for int→int case):
+        white moves down (to smaller numbers): distance = from - to
+        black moves up (to larger numbers):  distance = to - from
+        """
+        if to_stack in (0, 25):
+            if player == "white":
+                return from_stack  # pip = point index
+            return 25 - from_stack
+        
+        if player == "white":
+            return from_stack - to_stack
+        return to_stack - from_stack
+
+    @staticmethod
+    def _distance_from_bar(to_stack: int, player: str) -> int:
+        """
+        Distance when re-entering from the bar.
+        - White enters on stacks 24 → 19 (dice 1 → 6).
+        - Black enters on stacks 1 → 6 (dice 1 → 6).
+        """
+        if player == "white":
+            # white enters from top into points 24..19
+            return 25 - to_stack
+        elif player == "black":
+            # black enters from bottom into points 1..6
+            return to_stack
+        else:
+            raise ValueError(f"Unknown player: {player}")
+        
 ge = GameEngine()
 
 ge.run()

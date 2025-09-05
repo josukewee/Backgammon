@@ -5,15 +5,9 @@ from presentation.Renderer import Renderer
 
 
 class InputHandler:
-    """
-    Captures user input (mouse, keyboard), converts it into
-    high-level game events, and sends them to the event queue.
-    """
-
     def __init__(self, renderer: Renderer, events: eventHandler) -> None:
         self.renderer = renderer
         self.events = events
-        self._selected_stack: Optional[int] = None
 
     def process_events(self) -> bool:
         """
@@ -27,55 +21,20 @@ class InputHandler:
 
             if event.type == pg.KEYDOWN:
                 if event.key == pg.K_ESCAPE:
-                    self._clear_selection()
+                    self.events.append({"type": "ResetSelection"})
                 elif event.key == pg.K_r:
-                    # Player requests dice roll (optional if you want manual rolling)
                     self.events.append({"type": "RollDiceRequest"})
 
-            if event.type == pg.MOUSEBUTTONDOWN:
-                if event.button == 1:  # Left click
-                    self._handle_left_click(event.pos)
-                elif event.button == 3:  # Right click
-                    self._clear_selection()
+            if event.type == pg.MOUSEBUTTONDOWN and event.button == 1:  
+                self._handle_left_click(event.pos)
 
         return True
 
-    # -------------------------
-    # Internal helpers
-    # -------------------------
     def _handle_left_click(self, pos: tuple[int, int]) -> None:
+        """Convert a click position into a ClickStack event (if valid)."""
         stack_id = self.renderer.get_stack_from_pos(pos)
-        if stack_id is None:
-            self._clear_selection()
-            return
-
-        if self._selected_stack is None:
-            # First click: Check if this stack has movable stones for current player
-            if self._can_select_stack(stack_id):
-                self._selected_stack = stack_id
-                # Request possible destinations from GameEngine
-                self.events.append({
-                    "type": "StackSelected",
-                    "stack_id": stack_id
-                })
-            else:
-                # Invalid selection → clear
-                self._clear_selection()
-        else:
-            # Second click: Attempt to move
-            if stack_id != self._selected_stack:
-                self.events.append({
-                    "type": "MoveEvent",
-                    "from_stack": self._selected_stack,
-                    "to_stack": stack_id
-                })
-            self._clear_selection()
-
-
-    def _can_select_stack(self, stack_id: int) -> bool:
-        # For now, just allow all selections (GameEngine will reject invalid moves)
-        return True
-
-    def _clear_selection(self) -> None:
-        self._selected_stack = None
-        # self.renderer.clear_highlight()
+        if stack_id is not None:
+            self.events.append({
+                "type": "ClickStack",
+                "stack_id": stack_id
+            })

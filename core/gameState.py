@@ -4,11 +4,11 @@ from datastructures.Board import Board
 
 class GameState:
     def __init__(self):
-        self._current_player = "white"  # or "black"
-        self._dice = (1, 1)            # Current roll (default values)
-        self._has_rolled = False       # Must roll before moving
-        self._doubling_cube = 1        # Starts at 1x (no double)
-        self._winner = None            # Track winner ("white", "black", or None)
+        self._current_player = "white"
+        self._dice = (1, 1)
+        self._has_rolled = False
+        self._doubling_cube = 1
+        self._winner = None
 
     def next_turn(self) -> None:
         """Swaps the current player and resets turn-specific state."""
@@ -36,11 +36,17 @@ class GameState:
     def get_current_dice(self):
         return self._dice
 
-    # --- Win Conditions ---
+    
     def check_winner(self, board: Board) -> Optional[str]:
-        """Returns "white", "black", or None if no winner yet."""
-        if board._home.has_all_pieces("white"):
+        """Returns 'white', 'black', or None if no winner yet."""
+        white_home = board.get_home["white"]
+        black_home = board.get_home["black"]
+
+        if len(white_home.get_stones) == 15:
             self._winner = "white"
-        elif board._home.has_all_pieces("black"):
+        elif len(black_home.get_stones) == 15:
             self._winner = "black"
+        else:
+            self._winner = None
+
         return self._winner
