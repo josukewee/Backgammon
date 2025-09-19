@@ -43,7 +43,7 @@ class GameEngine:
 
         self.running = True
 
-        self._state = "IDLE"            # IDLE | STACK_SELECTED
+        self._state = "IDLE" # IDLE | STACK_SELECTED
         self._selected_stack = None       
 
 
