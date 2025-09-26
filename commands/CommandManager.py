@@ -9,23 +9,24 @@ class CommandManager:
     def execute(self, command: Command) -> None:
         command.execute()
         self._history.append(command)
-        self._undone.clear()  # clear redo history on new move
-
-    def undo(self) -> None:
+        self._undone.clear()
+    def undo(self) -> Command:
         if not self._history:
             raise RuntimeError("No commands to undo")
 
         command = self._history.pop()
         command.undo()
         self._undone.append(command)
+        return command
 
-    def redo(self) -> None:
+    def redo(self) -> Command:
         if not self._undone:
             raise RuntimeError("No commands to redo")
 
         command = self._undone.pop()
         command.execute()
         self._history.append(command)
+        return command
 
     def clear(self) -> None:
         self._history.clear()

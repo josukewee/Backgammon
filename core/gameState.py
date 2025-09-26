@@ -1,11 +1,13 @@
 from random import randint
 from typing import Optional
+from datastructures import Dice
 from datastructures.Board import Board
 
 class GameState:
     def __init__(self):
         self._current_player = "white"
         self._dice = (1, 1)
+        # self._real_dice = Dice()
         self._has_rolled = False
         self._doubling_cube = 1
         self._winner = None

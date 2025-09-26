@@ -8,6 +8,8 @@ from core.moveMediator import MoveMediator
 from core.eventHandler import eventHandler
 from presentation.Renderer import Renderer
 from core.InputHandler import InputHandler
+from commands.CommandManager import CommandManager
+from commands.MoveCommand import MoveCommand
 
 
 class GameEngine:
@@ -40,6 +42,9 @@ class GameEngine:
         # turn state
         self._turn_active: bool = False
         self._moves_remaining: List[int] = []  
+
+        # command history for undo/redo within a turn
+        self._command_manager = CommandManager()
 
         self.running = True
 
@@ -76,7 +81,7 @@ class GameEngine:
                     
 
         # Game finished
-        winner = self._game_state.check_winner(self.board)
+        winner = self._game_state.check_winner(self._board)
         print(f"Winner: {winner}")
         pg.quit()
 
@@ -93,16 +98,19 @@ class GameEngine:
         self._turn_active = True
         print(f"\n--- {current_player}'s turn --- rolled {dice} → moves {self._moves_remaining}")
 
+        # clear command history at start of turn
+        self._command_manager.clear()
+
         bar_stones = self._board.get_bar_stones(current_player)
         if bar_stones:
             print(f"DEBUG: {current_player} has {len(bar_stones)} stone(s) on bar → forcing re-entry")
-
-            # compute destinations as if "BarSelected"
+            # compute destinations from available pips with correct orientation
             destinations = []
-            for to_stack in range(1, 25):
-                if self._mediator.validate_move(self._board.get_bar, to_stack):
-                    if(to_stack in self._game_state.get_current_dice):
-                        destinations.append(to_stack)
+            pips = sorted(set(self._moves_remaining))
+            for pip in pips:
+                to_stack = (25 - pip) if current_player == "white" else pip
+                if 1 <= to_stack <= 24 and self._mediator.validate_move(self._board.get_bar, to_stack):
+                    destinations.append(to_stack)
 
             if destinations:
                 self._events.append({
@@ -149,6 +157,12 @@ class GameEngine:
                 
                 self._handle_move_event(event)
                 self._renderer.clear_highlights()
+            
+            elif event["type"] == "UndoRequest":
+                self._handle_undo()
+
+            elif event["type"] == "RedoRequest":
+                self._handle_redo()
             
 
                 
@@ -227,17 +241,65 @@ class GameEngine:
             return
 
         print("DEBUG: move is allowed")
-        moved_stone, _ = self._mediator.execute_move(from_stack, to_stack)
+
+        # Create and execute command (records stones for undo)
+        cmd = MoveCommand(self._board, current, from_stack, to_stack)
+        self._command_manager.execute(cmd)
+
+        # Determine die value used and consume appropriately
         if isinstance(from_stack, int):
-            used = self._distance_for_player(from_stack, to_stack, current)
+            distance = self._distance_for_player(from_stack, to_stack, current)
         elif isinstance(from_stack, Bar):
-            used = self._distance_from_bar(to_stack, current)
+            distance = self._distance_from_bar(to_stack, current)
         else:
             raise ValueError(f"Unsupported from_stack type: {type(from_stack)}")
 
+        # actual consumed die respects overshoot rule
+        consumed = distance if distance in self._moves_remaining else max(self._moves_remaining)
+        cmd.set_consumed_die_value(consumed)
 
-        print(f"DEBUG: Consuming pip {used}")
-        self._consume_pip(used)
+        print(f"DEBUG: Consuming pip {consumed}")
+        self._consume_pip(consumed)
+
+    def _handle_undo(self) -> None:
+        if not self._turn_active:
+            return
+        try:
+            cmd = self._command_manager.undo()
+        except RuntimeError as e:
+            print(str(e))
+            return
+
+        # Restore the die that was consumed by this move
+        consumed = getattr(cmd, "get_consumed_die_value", lambda: None)()
+        if consumed is not None:
+            self._moves_remaining.append(consumed)
+            self._moves_remaining.sort(reverse=True)
+            self._set_game_dice(tuple(self._moves_remaining))
+        # Clear selection/highlight
+        self._selected_stack = None
+        self._state = "IDLE"
+        self._renderer.clear_highlights()
+
+    def _handle_redo(self) -> None:
+        if not self._turn_active or not self._moves_remaining:
+            return
+        try:
+            cmd = self._command_manager.redo()
+        except RuntimeError as e:
+            print(str(e))
+            return
+
+        consumed = getattr(cmd, "get_consumed_die_value", lambda: None)()
+        if consumed is None:
+            # fallback compute (should not happen)
+            print("DEBUG: No stored consumed die on command; skipping die consumption")
+            return
+        if consumed not in self._moves_remaining:
+            # if the exact die isn't there, use max (mirrors _consume_pip behavior for overshoot)
+            consumed = max(self._moves_remaining)
+        print(f"DEBUG: Consuming pip (redo) {consumed}")
+        self._consume_pip(consumed)
 
     # Dice consumption
   

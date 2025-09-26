@@ -77,7 +77,7 @@ class Board:
 
         
 
-        for index, number_of_pieces, color in bearing_off_layout:
+        for index, number_of_pieces, color in initial_layout:
             stack = self._stacks[index - 1] # stack itself stores the 0-index values
 
             for _ in range(number_of_pieces):

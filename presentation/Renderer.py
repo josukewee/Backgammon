@@ -30,6 +30,8 @@ class Renderer:
     BLACK_COLUMN = (229, 186, 115)
     RED = (250, 0, 0)
     BLACK = (0, 0, 0)
+    BLUE = (70, 130, 180)
+    GREEN = (60, 179, 113)
 
     def __init__(self, board: Board, screen_width: int =WIDTH, screen_height: int = HEIGHT):
         
@@ -54,9 +56,17 @@ class Renderer:
         self.description_rect = pg.Rect(self.SQ_SIZE * 16, self.SQ_SIZE, self.SQ_SIZE*8, self.SQ_SIZE * 11)  
 
 
+        # UI Buttons
+        btn_w = 120
+        btn_h = 40
+        margin = 10
+        self.undo_button_rect = pg.Rect(margin, margin, btn_w, btn_h)
+        self.redo_button_rect = pg.Rect(margin + btn_w + margin, margin, btn_w, btn_h)
+        
         # might not be the place to be
         pg.font.init()
         self.my_font = pg.font.SysFont('Comic Sans MS', 30)
+        self.button_font = pg.font.SysFont('Arial', 22)
 
     def _load_assets(self) -> Dict[str, pg.Surface]:
         return {
@@ -109,6 +119,9 @@ class Renderer:
         if len(self.highlighted_stacks) != 0:
             # print(f"DEBUG Highlight stacks: {self.highlighted_stacks}")
             self._draw_highlight()
+
+        # Draw UI buttons
+        self._draw_buttons(self.dynamic_surface)
 
         # Combine layers
         self.screen.blit(self.static_surface, (0, 0))
@@ -195,6 +208,13 @@ class Renderer:
         return None
     
 
+    def get_button_from_pos(self, pos: tuple[int, int]) -> Union[str, None]:
+        if self.undo_button_rect.collidepoint(pos):
+            return "UNDO"
+        if self.redo_button_rect.collidepoint(pos):
+            return "REDO"
+        return None
+
     def _stack_rect(self, stack_id: int) -> pg.Rect:
         """Return the rectangle area on the screen that corresponds to a stack."""
 
@@ -224,9 +244,6 @@ class Renderer:
             text_surface = font.render(str(stack_id), True, (255, 0, 0))
             text_rect = text_surface.get_rect(center=rect.center)
             self.screen.blit(text_surface, text_rect)
-
-            # for debugging console
-            print(f"Stack {stack_id}: {rect}")
         
     def _stack_to_pixels(self, stack_id: int) -> tuple[int, int]:
         """
@@ -385,28 +402,13 @@ class Renderer:
         end_px = self._stack_to_pixels(to_pos)
         stone = self._get_stone_at_position(from_pos)
         self.animations.append(StoneAnimation(stone, start_px, end_px))
-    
-# def test():
-#     renderer_test = Renderer()
-#         # Initialize
-#     pg.init()
-#     renderer = Renderer()
-#     clock = pg.time.Clock()
-    
-#     # Force-draw one white stone at position 1 (for testing)
-#     renderer.board.get_stack(1).add_stone("white")  # Mock a stone
-    
-#     # Main loop
-#     running = True
-#     while running:
-#         for event in pg.event.get():
-#             if event.type == pg.QUIT:
-#                 running = False
-        
-#         # Update and render
-#         renderer.update(1/60)  # Fixed delta time
-        
-#         # Limit FPS (optional)
-#         clock.tick(60)
-    
-#     pg.quit()
+
+    def _draw_buttons(self, surface: pg.Surface) -> None:
+        # Undo button
+        pg.draw.rect(surface, self.BLUE, self.undo_button_rect, border_radius=6)
+        undo_text = self.button_font.render("Undo", True, self.WHITE)
+        surface.blit(undo_text, undo_text.get_rect(center=self.undo_button_rect.center))
+        # Redo button
+        pg.draw.rect(surface, self.GREEN, self.redo_button_rect, border_radius=6)
+        redo_text = self.button_font.render("Redo", True, self.WHITE)
+        surface.blit(redo_text, redo_text.get_rect(center=self.redo_button_rect.center))
