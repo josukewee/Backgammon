@@ -4,6 +4,7 @@ from datastructures.Board import Board
 from core.gameState import GameState
 from datastructures.Home import Home
 from datastructures.Stone import Stone
+from datastructures.Stack import Stack
 
 
 class MoveMediator:
@@ -109,8 +110,6 @@ class MoveMediator:
         if not self.validate_move(from_stack, to_stack):
             raise ValueError(f"Invalid move from stack index: {from_stack} to stack index: {to_stack} by {current_player}")
         
-        distance = self._calculate_distance(from_stack, to_stack, current_player)
-
         # bar move
         if isinstance(from_stack, Bar):
             moved_stone, hit_stone = self._process_bar_move(from_stack, to_stack)
@@ -118,47 +117,43 @@ class MoveMediator:
 
         stone = self._board.get_stack(from_stack).peek_stone()
 
-        # bearing off home is incexed 0 for black and 25 for white
+        # bearing off home is indexed 0 for black and 25 for white
         if self.can_bear_off(current_player):
             if (current_player == "white" and to_stack == 25) or (current_player == "black" and to_stack == 0):
-                self._board.move_stone(stone, self._board.get_home[stone.color])
+                target_home = self._board.get_home[stone.color]
+                self._move_stone_internal(stone, target_home)
                 return stone, None
 
         # hitting
         if self._is_hit(to_stack, current_player):
             hit_stone = self.hit_stone(to_stack)
 
-        # print(f"DEBUG: About to move stone from stack {from_stack} to {to_stack}")
-        # print(f"DEBUG: stone ref: {stone}, color: {stone.get_color}")
-        print(f"DEBUG: board location of stone: {self._board._stone_location.get(stone)}")
-
-        # Basic condition
-        self._board.move_stone(stone, to_stack)
-
-        print("DEBUG BOARD STATE:")
-        for i in range(1, 25):
-            stones = [s.get_color for s in self._board.get_stack(i).get_stones]
-            if stones:
-                print(f"Stack {i}: {stones}")
-            print(self._board._bar)
+        # move to target stack
+        self._move_stone_internal(stone, self._board.get_stack(to_stack))
         return stone, hit_stone 
 
     def move_stone(self, stone: Stone, from_stack: Union[int, Bar, Home], to_stack: Union[int, Bar, Home]):
         """Bypasses full validation logic. Used for undo operations."""
-
-       
-        if isinstance(from_stack, Home):
-            from_stack.force_remove_stone(stone)
+        # remove from explicit container
+        if isinstance(from_stack, int):
+            container = self._board.get_stack(from_stack)
         else:
-            from_stack.remove_stone(stone)
+            container = from_stack
+        container.remove_stone(stone)
 
-        if isinstance(to_stack, int):
-            target_stack = self._board.get_stack(to_stack)
-            target_stack.add_stone(stone)
-            self._board.update_stone_location(stone, target_stack)
-        else:
-            to_stack.add_stone(stone)
-            self._board.update_stone_location(stone, to_stack)
+        # add to target container resolved via facade
+        target_container = self._board.resolve_target_container(to_stack)
+        target_container.add_stone(stone)
+        self._board.update_stone_location(stone, target_container)
+
+    def _move_stone_internal(self, stone: Stone, target_container: Union[Stack, Bar, Home]):
+        """Internal low-level move using facade containers only."""
+        origin = self._board.get_stone_location(stone)
+        if isinstance(origin, Home):
+            raise TypeError("Cannot move a stone from home")
+        origin.remove_stone(stone)
+        target_container.add_stone(stone)
+        self._board.update_stone_location(stone, target_container)
 
     def hit_stone(self, to_stack: int) -> Optional[Stone]:
 
@@ -167,7 +162,7 @@ class MoveMediator:
         if self._is_hit(to_stack, current_player):
             stack = self._board.get_stack(to_stack)
             stone = stack.peek_stone()
-            self._board.move_stone(stone, self._board.get_bar)
+            self._move_stone_internal(stone, self._board.get_bar)
 
             return stone
 
@@ -183,9 +178,9 @@ class MoveMediator:
         # hitting
         if self._is_hit(to_stack, current_player):
             hit_stone = self._board.get_stack(to_stack).peek_stone()
-            self._board.move_stone(hit_stone, self._board.get_bar)
+            self._move_stone_internal(hit_stone, self._board.get_bar)
 
-        self._board.move_stone(stone, to_stack)
+        self._move_stone_internal(stone, self._board.get_stack(to_stack))
 
         return stone, hit_stone
 

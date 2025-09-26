@@ -243,7 +243,7 @@ class GameEngine:
         print("DEBUG: move is allowed")
 
         # Create and execute command (records stones for undo)
-        cmd = MoveCommand(self._board, current, from_stack, to_stack)
+        cmd = MoveCommand(self._mediator, from_stack, to_stack)
         self._command_manager.execute(cmd)
 
         # Determine die value used and consume appropriately

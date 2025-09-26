@@ -85,39 +85,14 @@ class Board:
                 self._stone_location[stone] = stack
                 stack.add_stone(stone)
 
-    
-    # probably needs to update imput stone to stone_uid
-    def move_stone(self, stone: Stone, target: Union[int, Bar, Home]) -> None:
-        origin = self._stone_location[stone]
-
-        if isinstance(origin, Home):
-            raise TypeError("Cannot move a stone from home")
-
-        # remove stone from its origin (shared interface)
-        origin.remove_stone(stone)
-
-        # moving to another Stack
+    # facade helpers (no movement here)
+    def resolve_target_container(self, target: Union[int, Bar, Home]) -> Union[Stack, Bar, Home]:
         if isinstance(target, int):
-            if not (0 <= target <= 25):
-                raise ValueError("Target stack number must be between 0 and 25")
-            target_stack = self._stacks[target - 1]
-            target_stack.add_stone(stone)
-            self._stone_location[stone] = target_stack
+            return self.get_stack(target)
+        if isinstance(target, (Bar, Home)):
+            return target
+        raise TypeError(f"Invalid target type: {type(target)}")
 
-        # moving to Bar (usually on hit)
-        elif isinstance(target, Bar):
-            target.add_stone(stone)
-            self._stone_location[stone] = target
-
-        # bearing off to Home
-        elif isinstance(target, Home):
-            target.add_stone(stone)
-            self._stone_location[stone] = target
-
-        else:
-            raise TypeError(f"Invalid target type: {type(target)}")
-        
-        
     def update_stone_location(self, stone: Stone, location: Union[Stack, Bar, Home]) -> None:
         self._stone_location[stone] = location
 
@@ -156,7 +131,7 @@ class Board:
     @property
     def get_home(self) -> Home:
         return self._home
-    
+
 
 # def test():
 #     board = Board()
