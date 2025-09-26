@@ -32,7 +32,7 @@ class Renderer:
     BLACK = (0, 0, 0)
 
     def __init__(self, board: Board, screen_width: int =WIDTH, screen_height: int = HEIGHT):
-        # for testing only
+        
         self.board = board
         
         self.screen = pg.display.set_mode((screen_width, screen_height))
@@ -48,8 +48,11 @@ class Renderer:
         self.white_bar_rect = pg.Rect(self.SQ_SIZE * 15, self.SQ_SIZE, self.SQ_SIZE, self.SQ_SIZE * 5)
         self.black_bar_rect = pg.Rect(self.SQ_SIZE * 15, self.SQ_SIZE * 7, self.SQ_SIZE, self.SQ_SIZE * 5)
 
-        self.white_home_rect = pg.Rect(self.SQ_SIZE * 14, self.SQ_SIZE, self.SQ_SIZE, self.SQ_SIZE * 5)
-        self.black_home_rect = pg.Rect(self.SQ_SIZE * 14, self.SQ_SIZE * 7, self.SQ_SIZE, self.SQ_SIZE * 5)        
+        self.black_home_rect = pg.Rect(self.SQ_SIZE * 14, self.SQ_SIZE, self.SQ_SIZE, self.SQ_SIZE * 5)
+        self.white_home_rect = pg.Rect(self.SQ_SIZE * 14, self.SQ_SIZE * 7, self.SQ_SIZE, self.SQ_SIZE * 5)        
+
+        self.description_rect = pg.Rect(self.SQ_SIZE * 16, self.SQ_SIZE, self.SQ_SIZE*8, self.SQ_SIZE * 11)  
+
 
         # might not be the place to be
         pg.font.init()
@@ -63,7 +66,8 @@ class Renderer:
             "white_highligh": self._load_image("black_highlight.png"),
             "board": pg.Surface((800, 600)),
             "highlight_stack_buttom": self._load_image("destination_light_bottom.png"),
-            "highlight_stack_top": self._load_image("destination_light.png")
+            "highlight_stack_top": self._load_image("destination_light.png"),
+            "bearing_off_highlight": self._load_image("bearing_off_light.png")
 
         }
     
@@ -91,13 +95,15 @@ class Renderer:
         self.screen.blit(self.static_surface, (0, 0))
         pg.display.flip()
 
-    def draw_frame(self):
+    def draw_frame(self, current_player, current_dice):
         
         self.dynamic_surface.fill((0, 0, 0, 0))
         # Draw dynamic elements
         self._draw_stones(self.dynamic_surface)
 
         self._draw_bar_stones(self.dynamic_surface)
+
+        self.draw_word_in_rect(current_player, current_dice)
         
         # self.debug_grid(self.dynamic_surface)
         if len(self.highlighted_stacks) != 0:
@@ -112,36 +118,74 @@ class Renderer:
         pg.display.flip() 
 
     # setter for hilighted stack
+        
+
+    def _draw_highlight(self):
+        if self.highlighted_stacks:
+            for stack_id in self.highlighted_stacks:
+                # Determine which highlight image to use
+                if stack_id == 0:
+                    # White home
+                    scaled_highlight = pg.transform.scale(
+                        self.assets["bearing_off_highlight"], self.white_home_rect.size
+                    )
+                    rect = self.white_home_rect
+                elif stack_id == 25:
+                    # Black home (assuming 25 is the black home stack)
+                    scaled_highlight = pg.transform.scale(
+                        self.assets["bearing_off_highlight"], self.black_home_rect.size
+                    )
+                    rect = self.black_home_rect
+                elif 1 <= stack_id <= 13:
+                    rect = self._stack_rect(stack_id)
+                    scaled_highlight = pg.transform.smoothscale(
+                        self.assets["highlight_stack_buttom"], rect.size
+                    )
+                elif 14 <= stack_id <= 24:
+                    rect = self._stack_rect(stack_id)
+                    scaled_highlight = pg.transform.smoothscale(
+                        self.assets["highlight_stack_top"], rect.size
+                    )
+                else:
+                    continue  # skip invalid stack_ids
+
+                # Draw the highlight
+                self.dynamic_surface.blit(scaled_highlight, rect.topleft)
+                self.dynamic_surface.blit(scaled_highlight, rect.topleft)
+
     def highlight_stacks(self, stack_ids: list[int]):
         self.highlighted_stacks = stack_ids
 
     def clear_highlights(self):
         self.highlighted_stacks = []
-        
-    def _draw_highlight(self):
-        # print(self.highlighted_stacks)
-        if self.highlighted_stacks:  # now a list
-            for stack_id in self.highlighted_stacks:
-                rect = self._stack_rect(stack_id)
-                if 1 <= stack_id <= 13:
-                    scaled_highlight = pg.transform.smoothscale(
-                        self.assets["highlight_stack_buttom"], rect.size
-                    )
-                else:
-                    scaled_highlight = pg.transform.smoothscale(
-                        self.assets["highlight_stack_top"], rect.size
-                    )
-                self.dynamic_surface.blit(scaled_highlight, rect.topleft)
 
+    def draw_word_in_rect(self, word: str, numbers: tuple, color=(0, 0, 0)):
+        font_size = 30
+        font = pg.font.SysFont('Comic Sans MS', font_size)
+        text_surf = font.render(word, True, color)
+
+        text_rect = text_surf.get_rect(center=self.description_rect.center)
+        self.dynamic_surface.blit(text_surf, text_rect)
+
+        numbers_str = f"{numbers}"
+        numbers_surf = font.render(numbers_str, True, color)
+
+        # Position numbers centered horizontally, slightly below the word
+        numbers_rect = numbers_surf.get_rect(
+            center=(self.description_rect.centerx, text_rect.bottom + numbers_surf.get_height() // 2)
+        )
+        self.dynamic_surface.blit(numbers_surf, numbers_rect)
+
+    
     def get_stack_from_pos(self, pos: tuple[int, int]) -> Union[int, None]:
         for stack_id in range(1, 25):
             if self._stack_rect(stack_id).collidepoint(pos):
                 return stack_id
             
         if self.white_home_rect.collidepoint(pos):
-            return 25
-        if self.black_home_rect.collidepoint(pos):
             return 0
+        if self.black_home_rect.collidepoint(pos):
+            return 25
         
         # bar is unclickable its forced to move from
         # if self.white_bar_rect.collidepoint(pos):
@@ -149,6 +193,7 @@ class Renderer:
         # if self.black_bar_rect.collidepoint(pos):
         #     return "black_bar"
         return None
+    
 
     def _stack_rect(self, stack_id: int) -> pg.Rect:
         """Return the rectangle area on the screen that corresponds to a stack."""
@@ -262,12 +307,12 @@ class Renderer:
         black_stones = bar.get_stones("black")
 
         x_black = self.black_bar_rect.x
-        top_y_black = self.black_bar_rect.top
+        # top_y_black = self.black_bar_rect.top
         bottom_y_black = self.black_bar_rect.bottom - self.SQ_SIZE
 
         x_white = self.white_bar_rect.x
         top_y_white = self.white_bar_rect.top
-        bottom_y_white = self.white_bar_rect.bottom - self.SQ_SIZE
+        # bottom_y_white = self.white_bar_rect.bottom - self.SQ_SIZE
 
         # draw white stones from top down
         for i, stone in enumerate(white_stones):
@@ -298,6 +343,8 @@ class Renderer:
 
         pg.draw.rect(surface, self.WHITE_COLUMN, self.white_home_rect)
         pg.draw.rect(surface, self.BLACK, self.black_home_rect)
+
+        pg.draw.rect(surface, self.BLACK, self.description_rect)
 
 
     def _draw_animations(self) -> None:

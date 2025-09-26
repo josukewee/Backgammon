@@ -27,14 +27,15 @@ class MoveMediator:
         try:
             distance = self._calculate_distance(from_stack, to_stack, current_player)
         except ValueError:
+            print("failed here")
             return False 
 
         # check if dice allow this move (except overshoot for bear-off)
         if distance not in current_dice:
             # allow overshoot ONLY if bearing off and no stones behind
-            if not (self.can_bear_off(current_player) and
+            if (self.can_bear_off(current_player) and
                     self._is_bear_off_move(from_stack, to_stack, distance, current_dice, current_player)):
-                return False
+                return True
 
         # validate destination
         # bearing off
@@ -79,20 +80,24 @@ class MoveMediator:
         # overshoot only if distance is greater than all dice values
         return any(d >= distance for d in dice)
 
-    def can_bear_off(self, color) -> bool:
-        # all the stones are in the home(last 5 stacks)
-        stacks = self._board.get_stacks
+    def can_bear_off(self, color: str) -> bool:
+        # quick bar check
+        if self._board.get_bar_stones(color):
+            return False
 
-        home_range = range(1, 6) if color == "white" else range(19, 25)
+        # home quadrants in point numbers (1..24)
+        home_points = set(range(1, 7)) if color == "black" else set(range(19, 25))
 
-        for i, stack in enumerate(stacks):
-            # exclude home stacks
-            if i in home_range:
+        stacks = list(self._board.get_stacks)
+        for pt in range(1, 25):
+            if pt in home_points:
                 continue
-            for stone in stack:
-                if(stone.get_color == color):
+            stones = stacks[pt - 1].get_stones
+            for s in stones:
+                # print(f"{s.get_color} sotne color, player color: {color}")
+                if s.get_color != color:
+                    # print("failed here")
                     return False
-                
         return True
 
     def execute_move(self, from_stack: Union[int, Bar], to_stack: int) -> tuple[Stone, Optional[Stone]]:
@@ -123,8 +128,8 @@ class MoveMediator:
         if self._is_hit(to_stack, current_player):
             hit_stone = self.hit_stone(to_stack)
 
-        print(f"DEBUG: About to move stone from stack {from_stack} to {to_stack}")
-        print(f"DEBUG: stone ref: {stone}, color: {stone.get_color}")
+        # print(f"DEBUG: About to move stone from stack {from_stack} to {to_stack}")
+        # print(f"DEBUG: stone ref: {stone}, color: {stone.get_color}")
         print(f"DEBUG: board location of stone: {self._board._stone_location.get(stone)}")
 
         # Basic condition
